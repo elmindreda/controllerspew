@@ -192,7 +192,7 @@ int CALLBACK WinMain(HINSTANCE instance,
                 OFN_OVERWRITEPROMPT;
 
     if (!GetSaveFileNameW(&ofn))
-        ExitProcess(0);
+        return 0;
 
     if (_wfopen_s(&context.stream, path, L"w") != 0)
     {
