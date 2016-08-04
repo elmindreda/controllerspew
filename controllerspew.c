@@ -62,57 +62,15 @@ static void terminate(Context* context)
         fclose(context->stream);
 }
 
-static BOOL supports_xinput(Context* context, const GUID* guid)
-{
-    UINT i;
-    BOOL result = FALSE;
-
-    for (i = 0;  i < context->ridlCount;  i++)
-    {
-        RID_DEVICE_INFO rdi = { 0 };
-        char name[256];
-        UINT size;
-
-        if (context->ridl[i].dwType != RIM_TYPEHID)
-            continue;
-
-        rdi.cbSize = sizeof(rdi);
-        size = sizeof(rdi);
-
-        if ((INT) GetRawInputDeviceInfoA(context->ridl[i].hDevice,
-                                         RIDI_DEVICEINFO,
-                                         &rdi, &size) == -1)
-        {
-            continue;
-        }
-
-        if (MAKELONG(rdi.hid.dwVendorId, rdi.hid.dwProductId) != guid->Data1)
-            continue;
-
-        memset(name, 0, sizeof(name));
-        size = sizeof(name);
-
-        if ((INT) GetRawInputDeviceInfoA(context->ridl[i].hDevice,
-                                         RIDI_DEVICENAME,
-                                         name, &size) == -1)
-        {
-            break;
-        }
-
-        name[sizeof(name) - 1] = '\0';
-        if (strstr(name, "IG_"))
-            return TRUE;
-    }
-
-    return FALSE;
-}
-
 static BOOL CALLBACK device_callback(const DIDEVICEINSTANCE* di, void* user)
 {
     Context* context = user;
     IDirectInputDevice8W* device;
     DIDEVCAPS dc = { 0 };
     char name[MAX_PATH * 2];
+    UINT i;
+    RID_DEVICE_INFO_HID rdih = { 0 };
+    BOOL xinput = FALSE;
 
     if (FAILED(IDirectInput8_CreateDevice(context->dinput8,
                                           &di->guidInstance,
@@ -148,13 +106,57 @@ static BOOL CALLBACK device_callback(const DIDEVICEINSTANCE* di, void* user)
         return DIENUM_CONTINUE;
     }
 
+    for (i = 0;  i < context->ridlCount;  i++)
+    {
+        RID_DEVICE_INFO rdi = { 0 };
+        char name[256];
+        UINT size;
+
+        if (context->ridl[i].dwType != RIM_TYPEHID)
+            continue;
+
+        rdi.cbSize = sizeof(rdi);
+        size = sizeof(rdi);
+
+        if ((INT) GetRawInputDeviceInfoA(context->ridl[i].hDevice,
+                                         RIDI_DEVICEINFO,
+                                         &rdi, &size) == -1)
+        {
+            continue;
+        }
+
+        if (MAKELONG(rdi.hid.dwVendorId, rdi.hid.dwProductId) !=
+            di->guidProduct.Data1)
+        {
+            continue;
+        }
+
+        memset(name, 0, sizeof(name));
+        size = sizeof(name);
+
+        if ((INT) GetRawInputDeviceInfoA(context->ridl[i].hDevice,
+                                         RIDI_DEVICENAME,
+                                         name, &size) == -1)
+        {
+            break;
+        }
+
+        name[sizeof(name) - 1] = '\0';
+        if (strstr(name, "IG_"))
+        {
+            xinput = TRUE;
+            rdih = rdi.hid;
+            break;
+        }
+    }
+
     fprintf(context->stream,
-            "%s (%u:%u:%u:%u): %08x-%04x-%04x-%02x%02x-%02x%02x%02x%02x%02x%02x\n",
+            "%s (%u:%u:%u:%u): %08x-%04x-%04x-%02x%02x-%02x%02x%02x%02x%02x%02x (%x:%x:%x:%x:%x)\n",
             name,
             dc.dwAxes,
             dc.dwPOVs,
             dc.dwButtons,
-            supports_xinput(context, &di->guidProduct),
+            xinput,
             di->guidProduct.Data1,
             di->guidProduct.Data2,
             di->guidProduct.Data3,
@@ -165,7 +167,12 @@ static BOOL CALLBACK device_callback(const DIDEVICEINSTANCE* di, void* user)
             di->guidProduct.Data4[4],
             di->guidProduct.Data4[5],
             di->guidProduct.Data4[6],
-            di->guidProduct.Data4[7]);
+            di->guidProduct.Data4[7],
+            rdih.dwVendorId,
+            rdih.dwProductId,
+            rdih.dwVersionNumber,
+            rdih.usUsagePage,
+            rdih.usUsage);
 
     return DIENUM_CONTINUE;
 }
