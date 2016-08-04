@@ -256,3 +256,4 @@ int CALLBACK WinMain(HINSTANCE instance,
     terminate(&context);
     return 0;
 }
+
